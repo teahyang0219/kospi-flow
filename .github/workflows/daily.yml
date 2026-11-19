@@ -1,0 +1,52 @@
+name: daily-kospi-flow
+
+on:
+  schedule:
+    # KST 06:30 (UTC 21:30, 일~목) = 한국 월~금 아침. GitHub 지연을 감안해 30분 일찍 시작 → 07시 전후 게시
+    - cron: "30 21 * * 0-4"
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "기준일 YYYYMMDD (비우면 마지막 거래일)"
+        required: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: daily
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Build report
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TZ: Asia/Seoul
+        run: python main.py ${{ github.event.inputs.date }}
+      - name: Commit data & site
+        run: |
+          git config user.name "kospi-flow-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data site
+          git diff --cached --quiet || git commit -m "report $(date +%Y-%m-%d)"
+          git push
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4
