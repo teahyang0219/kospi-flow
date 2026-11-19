@@ -36,10 +36,19 @@ def build_context(d: dict) -> str:
             items = [s[c] for c in d["ranks"][inv][side][:7]]
             lines.append(f"{inv} {label}: " + ", ".join(
                 f"{x['name']}({x['code']}) {_fmt(x[inv])} [{x['pct']:+.2f}%]" for x in items))
+    mv = d.get("movers", {})
+    names = {c: x["name"] for c, x in s.items()}
+    for kind, label in (("up", "급등"), ("down", "급락")):
+        if mv.get(kind):
+            lines += ["", f"[코스피 전체 {label} TOP5 (일반주식, 거래대금 30억↑)]"]
+            for m in mv[kind]:
+                names[m["code"]] = m["name"]
+                fl = ", ".join(f"{k} {_fmt(m[k])}" for k in INV if k in m)
+                lines.append(f"- {m['name']}({m['code']}) {m['pct']:+.2f}% 거래대금 {m['tv']:,}억 {fl}")
     lines += ["", "[종목 뉴스 헤드라인]"]
     for code, heads in d["stock_news"].items():
-        if code in s and heads:
-            lines.append(f"- {s[code]['name']}: " + " / ".join(heads))
+        if code in names and heads:
+            lines.append(f"- {names[code]}: " + " / ".join(heads))
     lines += ["", "[증시 주요뉴스]"]
     for n in d["market_news"]:
         lines.append(f"- {n['title']} — {n['summary']}")
@@ -62,9 +71,11 @@ INSTR = """위 데이터를 바탕으로 아래 JSON 하나만 출력하세요(�
     "개인": {...같은 형식}
   },
   "stocks": [{"code": "종목코드", "name": "종목명", "who": "주도 주체 예: 외국인 매수·개인 매도", "why": "이유 1~2문장"}],
-  "watch": ["오늘 장에서 지켜볼 포인트 2~3개"]
+  "watch": ["오늘 장에서 지켜볼 포인트 2~3개"],
+  "movers": [{"code": "종목코드", "why": "급등/급락 이유 1~2문장"}]
 }
-stocks에는 수급이 가장 두드러진 종목 8~10개를 고르세요."""
+stocks에는 수급이 가장 두드러진 종목 8~10개를 고르세요.
+movers에는 급등·급락 TOP5 종목(데이터에 있는 경우) 각각의 이유를 빠짐없이 쓰세요."""
 
 
 def _extract_json(text: str) -> dict:
@@ -123,6 +134,8 @@ def rule_commentary(d: dict) -> dict:
         "summary": [f"코스피는 {idx['close']:,.2f}로 {idx['pct']:+.2f}% 마감했습니다.",
                     "투자자별로는 " + ", ".join(f"{k} {_fmt(f[k])}" for k in INV) + "입니다."],
         "investors": inv, "stocks": stocks[:9],
+        "movers": [{"code": m["code"], "why": (d["stock_news"].get(m["code"]) or ["-"])[0]}
+                   for m in d.get("movers", {}).get("up", []) + d.get("movers", {}).get("down", [])],
         "watch": ["(AI 해설 비활성화: ANTHROPIC_API_KEY 설정 시 원인 분석이 추가됩니다)"],
         "_source": "rule",
     }

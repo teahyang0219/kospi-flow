@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import html
 import json
+import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
@@ -116,6 +117,38 @@ def main_news(n: int = 15) -> list[dict]:
         return []
 
 
+def movers(date: str, n: int = 5, min_value_eok: float = 30, any_date: bool = False) -> dict:
+    """코스피 전체 급등/급락 TOP n. 일반 주식 + 거래대금 min_value_eok억 이상만.
+
+    네이버 순위는 '최근 거래일' 기준이라, 순위 날짜가 기준일과 다르면(과거일 재생성 등) 비워 둔다.
+    """
+    out = {"up": [], "down": []}
+    for kind in out:
+        js = get(f"{M}/stocks/{kind}/KOSPI?page=1&pageSize=100")
+        for s in js.get("stocks", []):
+            if s.get("stockEndType") != "stock":
+                continue
+            tv = num(s.get("accumulatedTradingValue")) / 100  # 백만원 -> 억원
+            if tv < min_value_eok:
+                continue
+            d = (s.get("localTradedAt") or "")[:10].replace("-", "")
+            if d != date and not any_date:
+                continue
+            out[kind].append({"code": s["itemCode"], "name": s["stockName"],
+                              "pct": num(s.get("fluctuationsRatio")),
+                              "close": num(s.get("closePrice")), "tv": round(tv)})
+            if len(out[kind]) == n:
+                break
+    # 종목별 투자자 수급(있으면) 붙이기
+    allm = out["up"] + out["down"]
+    with ThreadPoolExecutor(8) as ex:
+        flows = list(ex.map(lambda m: stock_flow({"code": m["code"], "name": m["name"], "mcap": None}, date), allm))
+    for m, f in zip(allm, flows):
+        if f:
+            m.update({k: f[k] for k in ("개인", "외국인", "기관")})
+    return out
+
+
 def collect(date: str | None = None, top_n: int = 100, hist_days: int = 20) -> dict:
     date = date or last_trading_date()
     chart = index_chart("KOSPI", date)
@@ -138,6 +171,12 @@ def collect(date: str | None = None, top_n: int = 100, hist_days: int = 20) -> d
     for r in ranks.values():
         focus.update(r["buy"][:5] + r["sell"][:5])
     focus.update(s["code"] for s in sorted(stocks, key=lambda s: abs(s["pct"]), reverse=True)[:5])
+    try:
+        mv = movers(date, any_date=bool(os.environ.get("MOVERS_ANY_DATE")))
+    except Exception as e:
+        print("movers failed:", repr(e))
+        mv = {"up": [], "down": []}
+    focus.update(m["code"] for m in mv["up"] + mv["down"])
     with ThreadPoolExecutor(8) as ex:
         news = dict(zip(focus, ex.map(stock_news, focus)))
 
@@ -154,6 +193,7 @@ def collect(date: str | None = None, top_n: int = 100, hist_days: int = 20) -> d
         "flow_hist": flows,
         "stocks": stocks,
         "ranks": ranks,
+        "movers": mv,
         "stock_news": news,
         "market_news": main_news(),
     }

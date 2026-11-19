@@ -94,12 +94,18 @@ tbody tr:hover{background:rgba(255,255,255,.04)}
 .stocks .s{border:1px solid var(--ring);border-radius:14px;padding:12px 14px;background:rgba(0,0,0,.25)}
 .stocks .who{font-size:12px;color:var(--gold);font-weight:700;margin-top:2px}
 .stocks .why{font-size:14px;color:var(--ink2)}
+.mv{display:grid;grid-template-columns:1fr 1fr;gap:16px}.pill.slate{background:linear-gradient(135deg,#3a4150,#262b35);border-color:transparent}
+.m{display:flex;gap:14px;align-items:flex-start;border:1px solid var(--ring);border-radius:14px;padding:12px 14px;margin-top:10px;background:rgba(0,0,0,.25)}
+.m .rk{font-size:30px;font-weight:900;line-height:1;width:28px;flex:none;color:var(--gold)}
+.m .top{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.m .top b{font-size:17px}.m .pct{font-size:20px;font-weight:900;white-space:nowrap}
+.m .meta{font-size:12px;color:var(--muted);margin:2px 0 4px}.m .why{font-size:14px;color:var(--ink2)}.m .mb{flex:1;min-width:0}
 .watch{margin:0;padding:0;list-style:none}.watch li{margin:8px 0;padding-left:26px;position:relative}
 .watch li::before{content:"★";position:absolute;left:0;color:var(--gold)}
 footer{margin-top:24px;font-size:12px;color:var(--muted);border-top:1px solid var(--ring);padding-top:16px}
 footer .star{color:var(--gold);font-weight:700;font-size:13px;margin-bottom:6px}
 @media (max-width:760px){.hero{grid-template-columns:1fr}.medalbox{order:-1;padding-top:30px}.medal{width:220px}
-.tiles,.inv,.two,.stocks{grid-template-columns:1fr}.tile .who{font-size:26px}.kicker{letter-spacing:.16em;font-size:12px;gap:10px}.kicker .ln{flex-basis:28px}.chart{height:320px}}
+.tiles,.inv,.two,.stocks,.mv{grid-template-columns:1fr}.tile .who{font-size:26px}.kicker{letter-spacing:.16em;font-size:12px;gap:10px}.kicker .ln{flex-basis:28px}.chart{height:320px}}
 </style></head>
 <body><div class="wrap">
 <header class="hero">
@@ -109,7 +115,7 @@ footer .star{color:var(--gold);font-weight:700;font-size:13px;margin-bottom:6px}
   <div class="big"><span>K</span>ospi<br><span>F</span>low<br><span>B</span>riefing</div>
   <h1 id="headline"></h1>
   <p class="lede">전일 코스피, <b>누가 사고 누가 팔았나.</b> 개인·외국인·기관 수급과 그 이유를 매일 아침 7시에.</p>
-  <div class="pills"><span class="pill red" id="dlabel"></span><a class="pill" href="#flow">수급 흐름</a><a class="pill" href="#top">상위 종목</a><a class="pill" href="archive.html">지난 리포트</a></div>
+  <div class="pills"><span class="pill red" id="dlabel"></span><a class="pill" href="#flow">수급 흐름</a><a class="pill" href="#movers">급등·급락</a><a class="pill" href="#top">상위 종목</a><a class="pill" href="archive.html">지난 리포트</a></div>
  </div>
  <div class="medalbox"><div class="ribbon l"></div><div class="ribbon r"></div><div class="medal" id="medal"></div></div>
 </header>
@@ -132,6 +138,11 @@ footer .star{color:var(--gold);font-weight:700;font-size:13px;margin-bottom:6px}
  <p class="sub">코스피 시가총액 상위 100종목 · 순매수 수량 × 종가로 추정한 금액(억원)</p>
  <div class="tabs" role="tablist" id="tabs"></div>
  <div class="two"><div id="cBuy" class="chart"></div><div id="cSell" class="chart"></div></div>
+</div>
+
+<div class="card" id="movers"><div class="lab">HOT MOVERS</div><h2>주목해봐야 할 종목 · 급등·급락 TOP 5</h2>
+ <p class="sub">코스피 전체 · 일반주식 · 거래대금 30억 원 이상 · <span id="mvDate"></span></p>
+ <div class="mv"><div><span class="pill red">급등 TOP 5</span><div id="mvUp"></div></div><div><span class="pill slate">급락 TOP 5</span><div id="mvDown"></div></div></div>
 </div>
 
 <div class="card"><div class="lab">WHY</div><h2>수급 주목 종목과 이유</h2><div class="stocks" id="stocks"></div></div>
@@ -174,6 +185,13 @@ document.getElementById("inv").innerHTML = INV.map((k,i)=>{const x=C.investors[k
 <b><span class="dot" style="background:var(--s${i+1})"></span>${k} · ${esc(x.stance)}</b><div class="one">${esc(x.one_line)}</div><div class="why">${esc(x.why)}</div></div>`}).join("");
 document.getElementById("stocks").innerHTML = (C.stocks||[]).map(s=>{const x=S[s.code];const p=x?`<span class="${x.pct>=0?"up":"down"}">${x.pct>=0?"▲":"▼"}${Math.abs(x.pct).toFixed(2)}%</span>`:"";
 return `<div class="s"><b>${esc(s.name)}</b> ${p}<div class="who">${esc(s.who)}</div><div class="why">${esc(s.why)}</div></div>`}).join("");
+(()=>{const mv=D.movers||{up:[],down:[]},W=Object.fromEntries((C.movers||[]).map(m=>[m.code,m.why]));
+ if(!mv.up.length&&!mv.down.length){document.getElementById("movers").style.display="none";return}
+ document.getElementById("mvDate").textContent=dl(D.date)+" 종가 기준";
+ const card=(m,i)=>{const up=m.pct>=0,fl=INV.filter(k=>k in m).map(k=>`${k[0]} ${Math.abs(m[k])<10?(m[k]>0?"+":"")+m[k].toFixed(1):fmt(m[k])}`).join(" / ");
+  return `<div class="m"><div class="rk">${i+1}</div><div class="mb"><div class="top"><b>${esc(m.name)}</b><span class="pct ${up?"up":"down"}">${up?"▲":"▼"}${Math.abs(m.pct).toFixed(2)}%</span></div>
+  <div class="meta">${m.close.toLocaleString("ko-KR")}원 · 거래대금 ${m.tv.toLocaleString("ko-KR")}억${fl?` · ${fl}억`:""}</div><div class="why">${esc(W[m.code]||"-")}</div></div></div>`};
+ document.getElementById("mvUp").innerHTML=mv.up.map(card).join("");document.getElementById("mvDown").innerHTML=mv.down.map(card).join("");})();
 document.getElementById("watch").innerHTML = (C.watch||[]).map(s=>`<li>${esc(s)}</li>`).join("");
 document.getElementById("foot").innerHTML = `<div class="star">★ 매일 아침 07:00 자동 갱신 · 데이터 수집부터 해설까지 Claude Code로 만들었습니다</div>데이터: 네이버페이 증권(KRX 집계) · 종목별 금액은 순매수 수량×종가 추정치 · 해설: ${C._source==="ai"?"Claude AI 자동 생성(웹검색 근거)":"규칙 기반 자동 생성"} · 생성 ${esc(D.generated_at)}<br>본 자료는 정보 제공 목적이며 투자 권유가 아닙니다.`;
 
